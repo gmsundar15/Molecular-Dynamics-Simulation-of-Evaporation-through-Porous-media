@@ -1,0 +1,97 @@
+variable rcut equal 12.5
+units metal
+dimension 3
+boundary p sf p
+atom_style atomic
+neighbor 2 bin
+neigh_modify delay 5
+
+region box block 0 72 0 600 0 72 units box    ### simulation box
+create_box 2 box
+
+lattice fcc 3.61                                                
+### lattice for solid region
+region 1 block 0 72 0 1 0 72 units box           ### fix solid atoms region (S1)
+region 2 block 0 72 1 4.9 0 72 units box         ### The region above the first layer (second region i.e, S2)
+region 3 block 0 72 4.9 15 0 72 units box       ### last layers of solid wall (S3)
+create_atoms 1 region 1
+create_atoms 1 region 2
+create_atoms 1 region 3
+#lattice none
+
+lattice fcc 5.76                                                
+### lattice for liquid region
+region 4 block 0 72 15 30 0 72 units box        ### liquid atoms region
+create_atoms 2 region 4
+#lattice none
+
+lattice fcc 32.86                                               
+### lattice for vapor region
+region 5 block 0 72 30 600 0 72 units box      ### vapor atoms region
+create_atoms 2 region 5
+#lattice none
+
+group S1 region 1
+group S2 region 2
+group S3 region 3
+group liquid region 4
+group vapor region 5
+group LV union vapor liquid             ### liquid+vapor atoms
+
+group solid union S1 S2 S3
+group whole1 subtract all S1            ### all atoms-wall_fix
+group whole2 subtract all S2            ### all atoms - S2
+
+mass 1 63.5463                    ### mass of solid atoms
+mass 2 39.948                      ### mass of liquid and vapor atoms
+set             group solid type 1
+set             group LV type 2
+
+pair_style lj/cut   ${rcut}
+
+pair_coeff 1 1 0.409598855 2.34    ${rcut}
+pair_coeff 2 2 0.0104233 3.40     ${rcut}
+pair_coeff 1 2 0.065007161 2.8689    ${rcut}
+
+compute T3   S3  temp
+compute_modify T3  dynamic yes
+
+compute T_LV  LV  temp
+compute_modify T_LV dynamic yes
+
+compute peratomV vapor stress/atom NULL
+compute pV vapor reduce sum c_peratomV[1] c_peratomV[2] c_peratomV[3]	
+variable P_V equal -(c_pV[1]+c_pV[2]+c_pV[3])/(3*3032640)   
+### 3032640 is the volume of LV region
+
+min_style cg
+minimize 1.0e-6 1.0e-8 10000 10000
+reset_timestep 0
+
+group SS union S2 S3
+velocity        S1 set 0.0 0.0 0.0 units box
+velocity        whole1 create 90 482748 units box
+fix     1 S1 setforce 0.0 0.0 0.0
+fix     2 all nve
+fix     3 SS langevin 90 90 100.0 699483
+fix     4 LV langevin 90 90 100.0 699483
+fix     6 all wall/reflect yhi EDGE units box
+
+thermo 1000
+thermo_style custom step  c_T3  c_T_LV  v_P_V
+thermo_modify line one lost error norm no
+dump 1 all atom 500 Cu-flat.vmd
+
+timestep 0.001
+run 100000
+############# Equlibration Period#################
+unfix 3
+unfix 4
+fix             5 S2 langevin 90 90 100.0 699483
+run 200000
+############# Evaporation Period#################
+unfix 2
+unfix 5
+fix             8 S2 nvt temp 130 130 0.1
+fix             9 whole2 nve
+run 2000000
