@@ -1,0 +1,132 @@
+# input file
+variable       Ts equal 300.0
+variable       Ts_end equal 500.0
+variable       dt equal 2.0
+variable       Tdamp equal 100*dt
+
+variable       spring_factor equal 67.6425
+
+variable       epl_CuCu equal 4.72
+variable       sigma_CuCu equal 1.9297
+variable       epl_OO equal 0.15535
+variable       sigma_OO equal 3.166
+variable       epl_CuO equal sqrt(${epl_CuCu}*${epl_OO})
+variable       sigma_CuO equal (${sigma_OO}+${sigma_CuCu})/2  
+
+# ----------------- Initialize Simulation ---------------------
+units          real
+dimension      3
+boundary       p p f
+processors     * * 1
+atom_style     full
+bond_style     harmonic
+angle_style    harmonic
+
+read_data      system.data
+
+mass 1 63.546  # Cu
+mass 2 15.9994 # O
+mass 3 1.00794 # H
+
+pair_style     hybrid lj/cut 10.0 lj/cut/coul/long 10.0
+#pair_modify   tail yes
+kspace_style   pppm 0.0001
+kspace_modify  slab 3.0
+kspace_modify  order 7
+
+pair_coeff   1   1  lj/cut ${epl_CuCu} ${sigma_CuCu}
+
+pair_coeff   2   2  lj/cut/coul/long ${epl_OO} ${sigma_OO}
+pair_coeff   2   3  lj/cut/coul/long 0.0 0.0
+pair_coeff   3   3  lj/cut/coul/long 0.0 0.0  
+
+bond_style   harmonic
+bond_coeff   1 450.0 1.0
+
+angle_style  harmonic
+angle_coeff  1 55.0 109.47
+
+pair_coeff   1 2 lj/cut ${epl_CuO} ${sigma_CuO}  # Cu-O
+pair_coeff   1 3 lj/cut 0.0        0.0     # Cu-H
+
+group        solid type 1
+group        water type 2 3
+region       fixed block EDGE EDGE EDGE EDGE EDGE 1 units box
+region       phan  block EDGE EDGE EDGE EDGE 1    6 units box
+
+group        fixed region fixed          # fixed atoms at the bottom
+group        phan  region phan           # phantom atoms that control temperature
+
+group        surf  subtract solid fixed   # surface atoms, wall atoms excluding fixed atoms
+group        free  subtract surf phan    # free atoms, thermal conduction layer
+
+neighbor     3.0 bin
+neigh_modify delay 0 every 1 check yes exclude group fixed fixed
+ 
+# ---------- Define Settings ---------------------
+compute      peng   all pe/atom
+compute      patoms water reduce sum c_peng
+compute      keng   all ke/atom
+compute      katoms water reduce sum c_keng
+variable     wateng equal "c_patoms+c_katoms"
+
+compute      wtemp water temp
+compute      wtempcom water temp/com
+compute      ptemp phan  temp
+compute      stemp surf  temp
+
+
+# ---------- Run Minimization ---------------------
+fix          freeze fixed setforce 0 0 0
+fix          spring solid spring/self ${spring_factor}
+fix          top_wall all wall/reflect zhi EDGE units box
+fix loadbalance all balance 100000 1.0 shift xy 10 1.1 weight time 0.8 out balance.output
+
+variable     time equal ${dt}*step/1000 ### time in ps
+
+thermo       1000
+thermo_style custom step v_time pe v_wateng c_wtemp c_wtempcom c_ptemp c_stemp press pxx pyy pzz
+min_style    cg
+minimize     1e-6 1e-8 5000 10000
+
+write_data   data.system_min
+reset_timestep 0
+
+# ---------- Run Equilibration ---------------------
+velocity     all create ${Ts} 13425 mom yes rot yes dist gaussian
+velocity     fixed set 0.0 0.0 0.0 sum no units box
+
+fix          fShakeSPCE water shake 0.0001 10 0 b 1 a 1
+
+fix          1 water nve
+fix          2 water temp/berendsen ${Ts} ${Ts} ${Tdamp}
+fix          3 surf nve
+fix          4 surf temp/berendsen ${Ts} ${Ts} ${Tdamp}
+
+dump     mydump1 all custom 10000 equil.*.lammpstrj id type x y z vx vy vz
+dump_modify  mydump1 sort id
+
+timestep     ${dt}
+run         250000
+
+write_data    data.system_equil
+write_restart restart.equil
+reset_timestep 0
+
+# ----------------- Main NEMD simulation: Temperature ramp in the phantom layers -----------------
+unfix        3
+unfix        2
+unfix        4
+undump       mydump1
+
+fix          5 free nve
+
+fix          tempramp phan nvt temp ${Ts_end} ${Ts_end} ${Tdamp}
+
+# ----------------- Main NEMD simulation: run -----------------
+
+dump     mydump2 all custom 5000 run.*.lammpstrj id type x y z vx vy vz
+dump_modify  mydump2 sort id
+restart      500000 restart.*.run
+
+run          5000000

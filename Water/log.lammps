@@ -1,0 +1,168 @@
+LAMMPS (15 Apr 2020)
+  using 8 OpenMP thread(s) per MPI task
+units           real
+atom_style      full
+read_data       ice_Ih.lmp
+  orthogonal box = (0 0 0) to (46.937 44.121 54.219)
+  2 by 1 by 2 MPI processor grid
+WARNING: Atom style in data file differs from currently defined atom style (../read_data.cpp:514)
+  reading atoms ...
+  10368 atoms
+  scanning bonds ...
+  2 = max bonds/atom
+  scanning angles ...
+  1 = max angles/atom
+  reading bonds ...
+  6912 bonds
+  reading angles ...
+  3456 angles
+  2 = max # of 1-2 neighbors
+  1 = max # of 1-3 neighbors
+  1 = max # of 1-4 neighbors
+  2 = max # of special neighbors
+  special bonds CPU = 0.0005591 secs
+  read_data CPU = 0.0354322 secs
+include         tip4p_ice.potential
+# TIP4P/ice for LAMMPS. Parameters set according to
+# https://lammps.sandia.gov/doc/Howto_tip4p.html
+
+group hydrogen type 1
+6912 atoms in group hydrogen
+group oxygen type 2
+3456 atoms in group oxygen
+
+set group oxygen charge -1.1794
+  3456 settings made for charge
+set group hydrogen charge 0.5897
+  6912 settings made for charge
+
+mass 1 1.008 # H
+mass 2 15.9994 # O
+
+pair_style lj/cut/tip4p/long 2 1 1 1 0.1577 8.5
+pair_modify tail yes
+kspace_style pppm/tip4p 1.0e-5
+
+pair_coeff 1 1 0.0 0.0
+pair_coeff 1 2 0.0 0.0
+pair_coeff 2 2 0.21084 3.1668
+
+bond_style harmonic
+bond_coeff 1 0.0 0.9572
+
+angle_style harmonic
+angle_coeff 1 0.0 104.52
+
+neighbor 2.0 bin
+neigh_modify every 1 check yes
+
+timestep        0.5
+
+variable        Nrun equal              1000
+variable        Ndump equal             500
+variable        Text_start equal        300
+variable        Text_end equal          300
+variable        Pext_start equal        1.0
+variable        Pext_end equal          1.0
+
+velocity all create ${Text_start} 122334 dist gaussian mom yes rot yes
+velocity all create 300 122334 dist gaussian mom yes rot yes
+fix contrain all shake 0.0001 100 0 b 1 a 1
+  0 = # of size 2 clusters
+  0 = # of size 3 clusters
+  0 = # of size 4 clusters
+  3456 = # of frozen angles
+  find clusters CPU = 0.0005797 secs
+
+thermo          100
+thermo_style    one
+thermo_modify   lost warn norm yes flush yes
+
+dump trj all atom ${Ndump} ice_ih.lammpstrj
+dump trj all atom 500 ice_ih.lammpstrj
+
+fix integrate all npt temp ${Text_start} ${Text_end} 100.0 iso ${Pext_start} ${Pext_end} 1000.0
+fix integrate all npt temp 300 ${Text_end} 100.0 iso ${Pext_start} ${Pext_end} 1000.0
+fix integrate all npt temp 300 300 100.0 iso ${Pext_start} ${Pext_end} 1000.0
+fix integrate all npt temp 300 300 100.0 iso 1 ${Pext_end} 1000.0
+fix integrate all npt temp 300 300 100.0 iso 1 1 1000.0
+
+run ${Nrun}
+run 1000
+PPPM initialization ...
+  extracting TIP4P info from pair style
+  using 12-bit tables for long-range coulomb (../kspace.cpp:332)
+  G vector (1/distance) = 0.369244
+  grid = 54 54 60
+  stencil order = 5
+  estimated absolute RMS force accuracy = 0.00358866
+  estimated relative force accuracy = 1.08072e-05
+  using double precision KISS FFT
+  3d grid and FFT values/proc = 76738 43740
+Neighbor list info ...
+  update every 1 steps, delay 10 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 10.8154
+  ghost atom cutoff = 10.8154
+  binsize = 5.4077, bins = 9 9 11
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair lj/cut/tip4p/long, perpetual
+      attributes: half, newton on
+      pair build: half/bin/newton
+      stencil: half/bin/3d/newton
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 25.17 | 25.17 | 25.17 Mbytes
+Step Temp E_pair E_mol TotEng Press Volume 
+       0     450.0217   -5.4737087            0   -4.5795519   -219.42208    112282.53 
+     100    182.59315   -5.2250495            0   -4.8622517    53.192563    112474.77 
+     200     148.4234   -5.1325508            0   -4.8376455   -1813.8671    112874.07 
+     300    144.21772   -5.0955466            0   -4.8089976   -1774.8712    112938.89 
+     400    170.37454   -5.1149578            0   -4.7764374   -707.84769    112604.68 
+     500    179.13222   -5.0956538            0   -4.7397325    925.96504    112139.05 
+     600     190.1401   -5.0779673            0   -4.7001742    1702.4106    111883.98 
+     700    203.72812   -5.0642034            0   -4.6594121    1713.8705    111992.51 
+     800    209.74812   -5.0344384            0   -4.6176859    1037.2053    112425.99 
+     900    218.94874   -5.0094588            0   -4.5744253    246.18058    112988.97 
+    1000    226.80781   -4.9803667            0   -4.5297179   -110.44503    113489.47 
+Loop time of 77.4904 on 32 procs for 1000 steps with 10368 atoms
+
+Performance: 0.557 ns/day, 43.050 hours/ns, 12.905 timesteps/s
+98.1% CPU use with 4 MPI tasks x 8 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 24.099     | 24.215     | 24.395     |   2.4 | 31.25
+Bond    | 0.0013034  | 0.0013342  | 0.0013836  |   0.1 |  0.00
+Kspace  | 32.583     | 32.764     | 32.881     |   2.1 | 42.28
+Neigh   | 0.086646   | 0.08667    | 0.086725   |   0.0 |  0.11
+Comm    | 0.42047    | 0.44456    | 0.46892    |   2.6 |  0.57
+Output  | 0.016239   | 0.01636    | 0.016563   |   0.1 |  0.02
+Modify  | 18.653     | 18.796     | 18.986     |   2.9 | 24.26
+Other   |            | 1.166      |            |       |  1.51
+
+Nlocal:    2592 ave 2595 max 2589 min
+Histogram: 1 0 0 1 0 0 1 0 0 1
+Nghost:    11244.5 ave 11256 max 11229 min
+Histogram: 1 0 0 0 0 1 0 1 0 1
+Neighs:    620475 ave 622491 max 618733 min
+Histogram: 1 0 0 1 1 0 0 0 0 1
+
+Total # of neighbors = 2481900
+Ave neighs/atom = 239.381
+Ave special neighs/atom = 2
+Neighbor list builds = 5
+Dangerous builds = 0
+
+write_restart restarted.end
+PPPM initialization ...
+  extracting TIP4P info from pair style
+  using 12-bit tables for long-range coulomb (../kspace.cpp:332)
+  G vector (1/distance) = 0.368945
+  grid = 54 54 60
+  stencil order = 5
+  estimated absolute RMS force accuracy = 0.00362695
+  estimated relative force accuracy = 1.09224e-05
+  using double precision KISS FFT
+  3d grid and FFT values/proc = 76738 43740
+Total wall time: 0:01:17

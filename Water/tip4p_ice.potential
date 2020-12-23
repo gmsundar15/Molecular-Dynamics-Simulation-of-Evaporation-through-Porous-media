@@ -1,0 +1,25 @@
+# TIP4P/ice for LAMMPS. Parameters set according to
+# https://lammps.sandia.gov/doc/Howto_tip4p.html
+
+group hydrogen type 1
+group oxygen type 2
+
+set group oxygen charge -1.1794
+set group hydrogen charge 0.5897
+
+mass 1 1.008 # H
+mass 2 15.9994 # O
+
+pair_style lj/cut/tip4p/long 2 1 1 1 0.1577 8.5
+pair_modify tail yes
+kspace_style pppm/tip4p 1.0e-5
+
+pair_coeff 1 1 0.0 0.0
+pair_coeff 1 2 0.0 0.0
+pair_coeff 2 2 0.21084 3.1668
+
+bond_style harmonic
+bond_coeff 1 0.0 0.9572
+
+angle_style harmonic
+angle_coeff 1 0.0 104.52

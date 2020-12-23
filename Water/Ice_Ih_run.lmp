@@ -1,0 +1,31 @@
+units           real
+atom_style      full
+read_data       ice_Ih.lmp
+include         tip4p_ice.potential
+
+neighbor 2.0 bin
+neigh_modify every 1 check yes
+
+timestep        0.5
+
+variable        Nrun equal              1000
+variable        Ndump equal             500
+variable        Text_start equal        300
+variable        Text_end equal          300
+variable        Pext_start equal        1.0
+variable        Pext_end equal          1.0
+
+velocity all create ${Text_start} 122334 dist gaussian mom yes rot yes
+fix contrain all shake 0.0001 100 0 b 1 a 1
+
+thermo          100
+thermo_style    one
+thermo_modify   lost warn norm yes flush yes
+
+dump trj all atom ${Ndump} ice_ih.lammpstrj
+
+fix integrate all npt temp ${Text_start} ${Text_end} 100.0 iso ${Pext_start} ${Pext_end} 1000.0
+
+run ${Nrun}
+
+write_restart restarted.end
